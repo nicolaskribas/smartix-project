@@ -1,0 +1,3 @@
+[submodule "liu2024collecting-dataset"]
+	path = liu2024collecting-dataset
+	url = https://github.com/internetsys/community_dictionary.git
