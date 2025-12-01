@@ -1,0 +1,25 @@
+Semantic Type,Semantic Sub Type,Semantic Text,Unique ASes Count,Unique Communities Count
+blackhole,,,317,363
+pref,,,241,814
+prepend,,0,4,19
+prepend,,1,373,590
+prepend,,2,365,572
+prepend,,3,309,489
+prepend,,4,121,154
+prepend,,5,65,81
+prepend,,6,43,59
+prepend,,7,12,12
+prepend,,8,12,12
+prepend,,9,14,21
+prepend,,N/A,11,59
+sel_ann,export,,387,4262
+sel_ann,no-export,,392,4240
+tag,IXP,,213,1412
+tag,asn,,174,1331
+tag,fac,,64,443
+tag,loc,,348,11571
+tag,rel,customer,438,1156
+tag,rel,partial customer,13,22
+tag,rel,partial provider,9,10
+tag,rel,peer,391,1739
+tag,rel,provider,296,448

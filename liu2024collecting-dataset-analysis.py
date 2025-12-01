@@ -100,6 +100,8 @@ def _(mo):
        "209": {
          "pref": [
     ```
+
+    Ou seja, foram adicionadas comunidades de _local preference_, _selective annoucement_ e _prepend_. Usaremos a versão mais recente.
     """)
     return
 
@@ -116,10 +118,10 @@ def _(pd):
         records = []
 
         for asn, type_subtype_content in json.items():
-            for semmantic_type, subtype_content in type_subtype_content.items():
+            for semantic_type, subtype_content in type_subtype_content.items():
                 conforming = True
 
-                match semmantic_type:
+                match semantic_type:
                     case "tag" | "sel_ann":
                         # in this case 'subtype_content' is a dictionary with
                         # subtypes as keys and values contains a list of list of items
@@ -131,20 +133,20 @@ def _(pd):
                     case "loc" | "IXP":
                         # AS 37271 has loc and IXP, which should be under a tag, but are the
                         # second nesting level
-                        conforming = False
+                        conforming = True  # lets say this is acceptable
 
                         # Fix: we wrap it in a dictionary with the correspondent sub type and set type
                         # to "tag"
                         subtype_content = {
-                            semmantic_type: subtype_content
+                            semantic_type: subtype_content
                         }  # ("loc" | "IXP): subtype content"
-                        semmantic_type = "tag"
+                        semantic_type = "tag"
                     case t:
                         raise Exception(f"unexpected type {t}")
 
-                for semmantic_sub_type, content in subtype_content.items():
-                    if semmantic_type == "tag":
-                        match semmantic_sub_type:
+                for semantic_sub_type, content in subtype_content.items():
+                    if semantic_type == "tag":
+                        match semantic_sub_type:
                             case "rel" | "loc" | "IXP" | "fac" | "asn":
                                 pass
                             case "origin":
@@ -152,11 +154,11 @@ def _(pd):
                                 # Fix: do nothing
                                 conforming = False
                             case s:
-                                raise Exception(f"unexpected semmanting sub type {s}")
+                                raise Exception(f"unexpected semantic sub type {s}")
 
                     if isinstance(content[0][0], list):
                         # AS 12389 has pref that nests in a list
-                        conforming = False
+                        conforming = True  # lets say this is acceptable
 
                         # Fix: we make sure that the list with content is the only element in the outer list
                         # then we use only this list
@@ -164,11 +166,11 @@ def _(pd):
                         content = content[0]
 
                     for item in content:
-                        if semmantic_type == "blackhole":
+                        if semantic_type == "blackhole":
                             item.append(None)  # c is None
 
                         # a, b, c
-                        community_value_type, community_value, semmantic_text = item
+                        community_value_type, community_value, semantic_text = item
 
                         match community_value_type:
                             case "explicit":
@@ -180,8 +182,8 @@ def _(pd):
                             case t:
                                 raise Exception(f"unexpected community value type: {t}")
 
-                        if semmantic_type == "tag" and semmantic_sub_type == "rel":
-                            match semmantic_text:
+                        if semantic_type == "tag" and semantic_sub_type == "rel":
+                            match semantic_text:
                                 case (
                                     "provider"
                                     | "peer"
@@ -206,7 +208,7 @@ def _(pd):
                                     conforming = False
                                     # Fix: we just mark as non-conforming
                                 case m:
-                                    raise Exception(f"unexpected meaning {m}")
+                                    raise Exception(f"unexpected semantic text {m}")
 
                         records.append(
                             {
@@ -214,9 +216,9 @@ def _(pd):
                                 "Community Value Type": community_value_type,
                                 "Community Value Numeric": community_value_numeric,
                                 "Community Value Pattern": community_value_pattern,
-                                "Semmantic Type": semmantic_type,
-                                "Semmantic Sub Type": semmantic_sub_type,
-                                "Semmantic Text": semmantic_text,
+                                "Semantic Type": semantic_type,
+                                "Semantic Sub Type": semantic_sub_type,
+                                "Semantic Text": semantic_text,
                                 "Conforming": conforming,
                             }
                         )
@@ -226,9 +228,9 @@ def _(pd):
             "Community Value Type": "category",
             "Community Value Numeric": "UInt64",
             "Community Value Pattern": "string",
-            "Semmantic Type": "category",
-            "Semmantic Sub Type": "category",
-            "Semmantic Text": "object",
+            "Semantic Type": "category",
+            "Semantic Sub Type": "category",
+            "Semantic Text": "object",
             "Conforming": "bool",
         }
         return pd.DataFrame(records).astype(schema)
@@ -263,6 +265,7 @@ def _(mo):
 
 @app.cell
 def _(df):
+    df.to_csv("liu2024collecting-dataset-semantics.csv", index=False)
     df
     return
 
@@ -291,27 +294,68 @@ def _(mo):
 
 @app.cell
 def _(df):
-    df.groupby(["Semmantic Type", "Semmantic Sub Type"], observed=True)["Semmantic Text"].nunique()
-    return
-
-
-@app.cell
-def _(df):
-    df[["Semmantic Type", "Semmantic Sub Type"]].drop_duplicates()
-    return
-
-
-@app.cell
-def _(df):
-    df_copy = df.copy()
-    criteria = (
-        (df_copy["Semmantic Type"] == "pref")
-        | (df_copy["Semmantic Type"] == "prepend")
-        | (df_copy["Semmantic Type"] == "sel_ann")
-        | (df_copy["Semmantic Sub Type"] == "loc")
+    # take semantic type and sub type as identifiers for communities
+    unique_semantics = (
+        df[df["Conforming"] == True]
+        .groupby(["Semantic Type", "Semantic Sub Type"], observed=True, dropna=False)
+        .agg(
+            Unique_ASes_Count=("AS Number", "nunique"), Unique_Communities_Count=("AS Number", "size")
+        )
+        .reset_index()
+        .rename(
+            columns={
+                "Unique_ASes_Count": "Unique ASes Count",
+                "Unique_Communities_Count": "Unique Communities Count",
+            }
+        )
     )
-    df_copy.loc[criteria, "Semmantic Text"] = None
-    df_copy[["Semmantic Type", "Semmantic Sub Type", "Semmantic Text"]].drop_duplicates()
+    unique_semantics.to_csv("liu2024collecting-dataset-unique-semantics.csv", index=False)
+    unique_semantics
+    return
+
+
+@app.cell
+def _(df):
+    df.groupby(["Semantic Type", "Semantic Sub Type"], observed=True, dropna=False)[
+        "Semantic Text"
+    ].nunique().sort_values(ascending=False)
+    return
+
+
+@app.cell
+def _(df):
+    df_copy = df[df["Conforming"] == True].copy()
+    criteria = (
+        (df_copy["Semantic Sub Type"] == "loc")
+        | (df_copy["Semantic Type"] == "sel_ann")
+        | (df_copy["Semantic Sub Type"] == "IXP")
+        | (df_copy["Semantic Sub Type"] == "asn")
+        | (df_copy["Semantic Sub Type"] == "fac")
+        | (df_copy["Semantic Type"] == "pref")
+        # | (df_copy["Semantic Type"] == "prepend")
+        # | (df_copy["Semantic Type"] == "sel_ann")
+    )
+    df_copy.loc[criteria, "Semantic Text"] = None
+    unique_semantics_granular = (
+        df_copy.groupby(
+            ["Semantic Type", "Semantic Sub Type", "Semantic Text"], observed=True, dropna=False
+        )
+        .agg(
+            Unique_ASes_Count=("AS Number", "nunique"), Unique_Communities_Count=("AS Number", "size")
+        )
+        .reset_index()
+        .rename(
+            columns={
+                "Unique_ASes_Count": "Unique ASes Count",
+                "Unique_Communities_Count": "Unique Communities Count",
+            }
+        )
+    )
+
+    unique_semantics_granular.to_csv(
+        "liu2024collecting-dataset-unique-semantics-granular.csv", index=False
+    )
+    unique_semantics_granular
     return
 
 
